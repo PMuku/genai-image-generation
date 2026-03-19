@@ -26,7 +26,7 @@ class GlassesDataset(Dataset):
     def __getitem__(self, idx):
         
         img_id = self.df['id'][idx]
-        label = self.df['label'][idx]
+        label = self.df['glasses'][idx]
 
         img_path = self._get_img_path(img_id)
         
