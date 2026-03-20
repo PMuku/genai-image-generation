@@ -46,3 +46,4 @@ def train_model(epochs=10):
 
 epoch_loss = train_model(epochs=10)
 print(f"Training loss after 10 epochs: {epoch_loss:.4f}")
+torch.save(model.state_dict(), "vae/model.pth")

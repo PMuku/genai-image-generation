@@ -15,10 +15,9 @@ class VAE(nn.Module):
             max(hidden_dim // 2, 32),
             hidden_dim,
         ]
-
-        img_dim = int((input_dim // 3) ** 0.5) # assuming input_dim is C*H*W and C=3
+        self.img_dim = int((input_dim // 3) ** 0.5) # assuming input_dim is C*H*W and C=3
         self.encoder_output_channels = encoder_channels[-1]
-        self.encoder_output_spatial = img_dim // (2 ** len(encoder_channels)) # each conv layer halves spatial dimensions
+        self.encoder_output_spatial = self.img_dim // (2 ** len(encoder_channels)) # each conv layer halves spatial dimensions
         # flattening
         self.encoder_output_dim = self.encoder_output_channels * self.encoder_output_spatial * self.encoder_output_spatial
 
