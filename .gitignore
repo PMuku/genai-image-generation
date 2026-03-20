@@ -2,3 +2,8 @@
 data/
 */__pycache__/
 *.pth
+vae/generated_images/
+vae/*.txt
+*.png
+*.jpg
+*.jpeg
