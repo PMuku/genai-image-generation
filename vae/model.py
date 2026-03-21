@@ -41,10 +41,13 @@ class VAE(nn.Module):
         self.decoder = nn.Sequential(
             nn.ConvTranspose2d(encoder_channels[3], encoder_channels[2], kernel_size=4, stride=2, padding=1),
             nn.LeakyReLU(0.2),
+            nn.Dropout2d(0.2),
             nn.ConvTranspose2d(encoder_channels[2], encoder_channels[1], kernel_size=4, stride=2, padding=1),
             nn.LeakyReLU(0.2),
+            nn.Dropout2d(0.2),
             nn.ConvTranspose2d(encoder_channels[1], encoder_channels[0], kernel_size=4, stride=2, padding=1),
             nn.LeakyReLU(0.2),
+            nn.Dropout2d(0.2),
             nn.ConvTranspose2d(encoder_channels[0], 3, kernel_size=4, stride=2, padding=1),
             nn.Sigmoid(),
         )
@@ -93,6 +96,7 @@ class VAE(nn.Module):
         return recon_x, mu, logvar
 
     def loss_function(self, recon_x, x, mu, logvar, beta = 1.0):
-        recon_loss = F.mse_loss(recon_x, x, reduction="mean")
+        recon_loss = 0.8 * F.l1_loss(recon_x, x, reduction="mean") + 0.2 * F.mse_loss(recon_x, x, reduction="mean")
         kl_loss = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
+        # print(f"Reconstruction Loss: {recon_loss.item():.4f}, KL Divergence: {kl_loss.item():.4f}")
         return recon_loss + beta * kl_loss

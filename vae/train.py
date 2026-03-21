@@ -14,18 +14,19 @@ IMG_DIR = "data/raw/faces-spring-2020/faces-spring-2020"
 
 def main():
 	dataset = GlassesDataset(CSV_PATH, IMG_DIR, img_size=128)
-	loader = DataLoader(dataset, batch_size=256, num_workers=2, pin_memory=True, shuffle=True)
+	loader = DataLoader(dataset, batch_size=64, num_workers=2, pin_memory=True, shuffle=True)
 
 	device = "cuda" if torch.cuda.is_available() else "cpu"
 
-	model = VAE(input_dim=128 * 128 * 3, hidden_dim=512, latent_dim=256).to(device)
+	model = VAE(input_dim=128 * 128 * 3, hidden_dim=256, latent_dim=32).to(device)
 	optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 
 	def train_model(epochs=10):
 		for epoch in range(epochs):
 			model.train()
 			running_loss = 0.0
-			beta = min(0.1, epoch / 20)
+			cycle = 10
+			beta = 0.5 + 0.5 * (epoch % cycle) / cycle
 			for images, labels in loader:
 				images = images.to(device)
 				labels = labels.float().unsqueeze(1).to(device)
@@ -39,13 +40,15 @@ def main():
 				running_loss += loss.item()
 			epoch_loss = running_loss / max(len(loader), 1)
 			print(f"Epoch {epoch+1}/{epochs}, Loss: {epoch_loss:.4f}")
+			if epoch in [2, 4, 6]:
+				torch.save(model.state_dict(), f"vae/model_epoch_{epoch+1}.pth")
 			
 		return epoch_loss
 
-	E = 30
+	E = 10
 	epoch_loss = train_model(epochs=E)
 	print(f"Training loss after {E} epochs: {epoch_loss:.4f}")
-	torch.save(model.state_dict(), "vae/model.pth")
+	# torch.save(model.state_dict(), "vae/model.pth")
 
 
 
