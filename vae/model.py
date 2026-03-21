@@ -35,22 +35,17 @@ class VAE(nn.Module):
         self.fc_mu = nn.Linear(self.encoder_output_dim, latent_dim)
         self.fc_logvar = nn.Linear(self.encoder_output_dim, latent_dim)
 
+        # label embedding for conditioning
+        self.label_embed = nn.Embedding(2, latent_dim)
         # flattened input to decoder
-        self.fc_decode = nn.Linear(latent_dim + 1, self.encoder_output_dim)
+        self.fc_decode = nn.Linear(latent_dim, self.encoder_output_dim)
 
-        self.decoder = nn.Sequential(
-            nn.ConvTranspose2d(encoder_channels[3], encoder_channels[2], kernel_size=4, stride=2, padding=1),
-            nn.LeakyReLU(0.2),
-            nn.Dropout2d(0.2),
-            nn.ConvTranspose2d(encoder_channels[2], encoder_channels[1], kernel_size=4, stride=2, padding=1),
-            nn.LeakyReLU(0.2),
-            nn.Dropout2d(0.2),
-            nn.ConvTranspose2d(encoder_channels[1], encoder_channels[0], kernel_size=4, stride=2, padding=1),
-            nn.LeakyReLU(0.2),
-            nn.Dropout2d(0.2),
-            nn.ConvTranspose2d(encoder_channels[0], 3, kernel_size=4, stride=2, padding=1),
-            nn.Sigmoid(),
-        )
+        self.decoder_layers = [nn.ConvTranspose2d(encoder_channels[3], encoder_channels[2], 4, 2, 1),
+                            nn.ConvTranspose2d(encoder_channels[2], encoder_channels[1], 4, 2, 1),
+                            nn.ConvTranspose2d(encoder_channels[1], encoder_channels[0], 4, 2, 1),
+                            nn.ConvTranspose2d(encoder_channels[0], 3, 4, 2, 1)]
+        self.act = nn.LeakyReLU(0.2)
+        self.dropout = nn.Dropout2d(0.2)
 
     # B -> B, 1 standard torch scalar dimension
     def _prepare_condition(self, labels, batch_size, device):
@@ -70,8 +65,10 @@ class VAE(nn.Module):
     def encode(self, x, labels):
         labels = self._prepare_condition(labels, x.size(0), x.device)
         labels_map = self._expand_condition(labels, x.size(2), x.size(3))
+
         encoded = self.encoder(torch.cat([x, labels_map], dim=1))
         encoded = torch.flatten(encoded, start_dim=1)
+        
         mu = self.fc_mu(encoded)
         logvar = self.fc_logvar(encoded)
         return mu, logvar
@@ -96,7 +93,7 @@ class VAE(nn.Module):
         return recon_x, mu, logvar
 
     def loss_function(self, recon_x, x, mu, logvar, beta = 1.0):
-        recon_loss = 0.8 * F.l1_loss(recon_x, x, reduction="mean") + 0.2 * F.mse_loss(recon_x, x, reduction="mean")
+        recon_loss = 0.8 * F.l1_loss(recon_x, x) + 0.2 * F.mse_loss(recon_x, x)
         kl_loss = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
         # print(f"Reconstruction Loss: {recon_loss.item():.4f}, KL Divergence: {kl_loss.item():.4f}")
         return recon_loss + beta * kl_loss
