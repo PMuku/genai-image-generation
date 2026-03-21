@@ -24,12 +24,16 @@ class VAE(nn.Module):
         self.encoder = nn.Sequential(
             nn.Conv2d(4, encoder_channels[0], kernel_size=4, stride=2, padding=1),
             nn.LeakyReLU(0.2),
+            nn.Dropout2d(0.1),
             nn.Conv2d(encoder_channels[0], encoder_channels[1], kernel_size=4, stride=2, padding=1),
             nn.LeakyReLU(0.2),
+            nn.Dropout2d(0.1),
             nn.Conv2d(encoder_channels[1], encoder_channels[2], kernel_size=4, stride=2, padding=1),
             nn.LeakyReLU(0.2),
+            nn.Dropout2d(0.1),
             nn.Conv2d(encoder_channels[2], encoder_channels[3], kernel_size=4, stride=2, padding=1),
             nn.LeakyReLU(0.2),
+            nn.Dropout2d(0.1),
         )
 
         self.fc_mu = nn.Linear(self.encoder_output_dim, latent_dim)
@@ -38,18 +42,18 @@ class VAE(nn.Module):
         # label embedding for conditioning
         self.label_embed = nn.Embedding(2, latent_dim)
         # flattened input to decoder
-        self.fc_decode = nn.Linear(latent_dim + 1, self.encoder_output_dim)
+        self.fc_decode = nn.Linear(latent_dim, self.encoder_output_dim)
 
         self.decoder = nn.Sequential(
             nn.ConvTranspose2d(encoder_channels[3], encoder_channels[2], 4, 2, 1),
             nn.LeakyReLU(0.2),
-            nn.Dropout2d(0.2),
+            nn.Dropout2d(0.1),
             nn.ConvTranspose2d(encoder_channels[2], encoder_channels[1], 4, 2, 1),
             nn.LeakyReLU(0.2),
-            nn.Dropout2d(0.2),
+            nn.Dropout2d(0.1),
             nn.ConvTranspose2d(encoder_channels[1], encoder_channels[0], 4, 2, 1),
             nn.LeakyReLU(0.2),
-            nn.Dropout2d(0.2),
+            nn.Dropout2d(0.1),
             nn.ConvTranspose2d(encoder_channels[0], 3, 4, 2, 1),
             nn.Sigmoid()
         )
@@ -82,7 +86,10 @@ class VAE(nn.Module):
 
     def decode(self, z, labels):
         labels = self._prepare_condition(labels, z.size(0), z.device)
-        decoded = self.fc_decode(torch.cat([z, labels], dim=1))
+        label_ids = labels.long().squeeze()
+        label_vec = self.label_embed(label_ids)
+        z = z + label_vec
+        decoded = self.fc_decode(z)
         # unflatten and reshape
         decoded = decoded.view(z.size(0), self.encoder_output_channels, self.encoder_output_spatial, self.encoder_output_spatial)
         decoded = self.decoder(decoded)
@@ -91,7 +98,8 @@ class VAE(nn.Module):
     def reparameterize(self, mu, logvar):
         std = torch.exp(0.5 * logvar) # standard deviation
         eps = torch.randn_like(std) # random noise
-        return mu + eps * std # reparameterization trick
+        z = mu + eps * std # reparameterization trick
+        return z
 
     def forward(self, x, labels=None):
         mu, logvar = self.encode(x, labels)

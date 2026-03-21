@@ -10,11 +10,11 @@ from vae.model import VAE
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-model = VAE(input_dim=128 * 128 * 3, hidden_dim=256, latent_dim=32).to(device)
-model.load_state_dict(torch.load("vae/model_epoch_3.pth", map_location=device))
+model = VAE(input_dim=64 * 64 * 3, hidden_dim=192, latent_dim=64).to(device)
+model.load_state_dict(torch.load("vae/model_2.pth", map_location=device))
 model.eval()
 
-os.makedirs("vae/generated_images/checkpoint3", exist_ok=True)
+os.makedirs("vae/generated_images/checkpoint8", exist_ok=True)
 
 def save_image(img, name):
     img = img[0].permute(1, 2, 0).cpu().numpy()
@@ -30,11 +30,12 @@ def generate_image(label, seed):
         labels = torch.full((1, 1), float(label), device=device)
 
         image = model.decode(z, labels)
-        save_image(image, f"vae/generated_images/checkpoint3/sample_{label}_{seed}.png")
+        save_image(image, f"vae/generated_images/checkpoint8/sample_{label}_{seed}.png")
 
-for i in range(3):
-    generate_image(label=1, seed=i)  # glasses
-    generate_image(label=0, seed=i)  # no glasses
+for i in range(8):
+    seed = torch.randint(0, 10000, (1,)).item()
+    generate_image(label=1, seed=seed)  # glasses
+    generate_image(label=0, seed=seed)  # no glasses
 
 # for EPOCH in [3, 5, 7]:
 
