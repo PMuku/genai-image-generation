@@ -50,7 +50,8 @@ class VAE(nn.Module):
             nn.ConvTranspose2d(encoder_channels[1], encoder_channels[0], 4, 2, 1),
             nn.LeakyReLU(0.2),
             nn.Dropout2d(0.2),
-            nn.ConvTranspose2d(encoder_channels[0], 3, 4, 2, 1)
+            nn.ConvTranspose2d(encoder_channels[0], 3, 4, 2, 1),
+            nn.Sigmoid()
         )
 
     # B -> B, 1 standard torch scalar dimension
