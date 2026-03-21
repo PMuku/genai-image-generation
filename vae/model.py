@@ -17,7 +17,7 @@ class VAE(nn.Module):
         ]
         self.img_dim = int((input_dim // 3) ** 0.5) # assuming input_dim is C*H*W and C=3
         self.encoder_output_channels = encoder_channels[-1]
-        self.encoder_output_spatial = self.img_dim // (2 ** len(encoder_channels)) # each conv layer halves spatial dimensions
+        self.encoder_output_spatial = self.img_dim // (2 ** (1 + len(encoder_channels))) # each conv layer halves spatial dimensions
         # flattening
         self.encoder_output_dim = self.encoder_output_channels * self.encoder_output_spatial * self.encoder_output_spatial
 
@@ -34,6 +34,9 @@ class VAE(nn.Module):
             nn.Conv2d(encoder_channels[2], encoder_channels[3], kernel_size=4, stride=2, padding=1),
             nn.LeakyReLU(0.2),
             nn.Dropout2d(0.1),
+            nn.Conv2d(encoder_channels[3], hidden_dim, kernel_size=4, stride=2, padding=1),
+            nn.LeakyReLU(0.2),
+            nn.Dropout2d(0.1),
         )
 
         self.fc_mu = nn.Linear(self.encoder_output_dim, latent_dim)
@@ -45,6 +48,9 @@ class VAE(nn.Module):
         self.fc_decode = nn.Linear(latent_dim, self.encoder_output_dim)
 
         self.decoder = nn.Sequential(
+            nn.ConvTranspose2d(hidden_dim, encoder_channels[3], 4, 2, 1),
+            nn.LeakyReLU(0.2),
+            nn.Dropout2d(0.1),
             nn.ConvTranspose2d(encoder_channels[3], encoder_channels[2], 4, 2, 1),
             nn.LeakyReLU(0.2),
             nn.Dropout2d(0.1),

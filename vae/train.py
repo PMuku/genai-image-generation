@@ -34,14 +34,14 @@ def main():
 
 	device = "cuda" if torch.cuda.is_available() else "cpu"
 
-	model = VAE(input_dim=64 * 64 * 3, hidden_dim=192, latent_dim=64).to(device)
+	model = VAE(input_dim=64 * 64 * 3, hidden_dim=256, latent_dim=128).to(device)
 	optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 
 	def train_model(epochs=10):
 		for epoch in range(epochs):
 			model.train()
 			running_loss = 0.0
-			beta = 0.4
+			beta = min(0.3, 0.3*epoch/50)
 			for images, labels in loader:
 				images = images.to(device)
 				labels = labels.float().unsqueeze(1).to(device)
@@ -61,7 +61,7 @@ def main():
 	E = 10
 	epoch_loss = train_model(epochs=E)
 	print(f"Training loss after {E} epochs: {epoch_loss:.4f}")
-	torch.save(model.state_dict(), "vae/model_2.pth")
+	torch.save(model.state_dict(), "vae/model_3.pth")
 
 if __name__ == "__main__":
 	main()
