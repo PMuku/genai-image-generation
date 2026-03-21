@@ -38,14 +38,20 @@ class VAE(nn.Module):
         # label embedding for conditioning
         self.label_embed = nn.Embedding(2, latent_dim)
         # flattened input to decoder
-        self.fc_decode = nn.Linear(latent_dim, self.encoder_output_dim)
+        self.fc_decode = nn.Linear(latent_dim + 1, self.encoder_output_dim)
 
-        self.decoder_layers = [nn.ConvTranspose2d(encoder_channels[3], encoder_channels[2], 4, 2, 1),
-                            nn.ConvTranspose2d(encoder_channels[2], encoder_channels[1], 4, 2, 1),
-                            nn.ConvTranspose2d(encoder_channels[1], encoder_channels[0], 4, 2, 1),
-                            nn.ConvTranspose2d(encoder_channels[0], 3, 4, 2, 1)]
-        self.act = nn.LeakyReLU(0.2)
-        self.dropout = nn.Dropout2d(0.2)
+        self.decoder = nn.Sequential(
+            nn.ConvTranspose2d(encoder_channels[3], encoder_channels[2], 4, 2, 1),
+            nn.LeakyReLU(0.2),
+            nn.Dropout2d(0.2),
+            nn.ConvTranspose2d(encoder_channels[2], encoder_channels[1], 4, 2, 1),
+            nn.LeakyReLU(0.2),
+            nn.Dropout2d(0.2),
+            nn.ConvTranspose2d(encoder_channels[1], encoder_channels[0], 4, 2, 1),
+            nn.LeakyReLU(0.2),
+            nn.Dropout2d(0.2),
+            nn.ConvTranspose2d(encoder_channels[0], 3, 4, 2, 1)
+        )
 
     # B -> B, 1 standard torch scalar dimension
     def _prepare_condition(self, labels, batch_size, device):
