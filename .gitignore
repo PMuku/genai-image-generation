@@ -7,3 +7,4 @@ vae/*.txt
 *.png
 *.jpg
 *.jpeg
+*/*/ablation_fid.ipynb
