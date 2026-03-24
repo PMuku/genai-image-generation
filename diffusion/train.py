@@ -1,14 +1,16 @@
-from shared.dataset import GlassesDataset
-from diffusion.model import UNet, noise_schedule, forward_diffusion, generate
-
 import argparse
 import os
 import sys
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 import torch
 from torch.utils.data import DataLoader
 from torchvision.utils import save_image
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from shared.dataset import GlassesDataset
+from diffusion.model import UNet, noise_schedule, forward_diffusion, generate
+from diffusion.evaluate import compute_fid
 
 device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 
@@ -74,7 +76,22 @@ print(f"Training loss after {EPOCHS} epochs: {epoch_loss:.4f}")
 torch.save(model.state_dict(), "diffusion/model.pth")
 
 model.eval()
+
+# Generate samples for visualization
 samples = generate(model, shape=(4, 3, 64, 64), timesteps=T, beta=beta, alpha=alpha, alpha_bar=alpha_bar, device=device)
 samples = samples.clamp(0, 1)
 save_image(samples, "diffusion/generated_faces.png", nrow=2)
 print("Saved generated samples to diffusion/generated_faces.png")
+
+# Compute FID score
+NUM_FID_SAMPLES = 64
+print(f"\nGenerating {NUM_FID_SAMPLES} samples for FID evaluation...")
+fid_samples = generate(model, shape=(NUM_FID_SAMPLES, 3, 64, 64), timesteps=T, beta=beta, alpha=alpha, alpha_bar=alpha_bar, device=device)
+fid_samples = fid_samples.clamp(0, 1)
+
+# Collect real images for comparison
+real_images = torch.stack([dataset[i][0] for i in range(min(NUM_FID_SAMPLES, len(dataset)))])
+
+fid_device = torch.device("cpu")  # InceptionV3 can be heavy on MPS, use CPU for stability
+fid_score = compute_fid(real_images, fid_samples, fid_device)
+print(f"FID Score: {fid_score:.2f} (lower is better)")
