@@ -46,6 +46,7 @@ def generate(model, shape, timesteps, beta, alpha, alpha_bar, device):
 class SinusoidalTimeEmbedding(nn.Module):
     def __init__(self, dim):
         super().__init__()
+        assert dim % 2 == 0, f"time_emb_dim must be even, got {dim}"
         self.dim = dim
 
     def forward(self, t):
@@ -57,24 +58,24 @@ class SinusoidalTimeEmbedding(nn.Module):
 
 
 class Block(nn.Module):
-    def __init__(self, img_ch, output_channels, time_emb_dim):
+    def __init__(self, in_ch, out_ch, time_emb_dim, num_groups=8):
         super().__init__()
-        self.conv1 = nn.Conv2d(img_ch, output_channels, kernel_size=3, padding=1)
-        self.conv2 = nn.Conv2d(output_channels, output_channels, kernel_size=3, padding=1)
-        self.batch_norm1 = nn.BatchNorm2d(output_channels)
-        self.batch_norm2 = nn.BatchNorm2d(output_channels)
-        self.time_proj = nn.Linear(time_emb_dim, output_channels)
+        self.conv1 = nn.Conv2d(in_ch, out_ch, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(out_ch, out_ch, kernel_size=3, padding=1)
+        self.norm1 = nn.GroupNorm(num_groups, out_ch)
+        self.norm2 = nn.GroupNorm(num_groups, out_ch)
+        self.time_proj = nn.Linear(time_emb_dim, out_ch)
+        self.residual = nn.Conv2d(in_ch, out_ch, kernel_size=1) if in_ch != out_ch else nn.Identity()
 
     def forward(self, feature_map, time_emb):
-        hidden = F.relu(self.batch_norm1(self.conv1(feature_map)))
+        hidden = F.relu(self.norm1(self.conv1(feature_map)))
         hidden = hidden + self.time_proj(time_emb)[:, :, None, None]
-        hidden = F.relu(self.batch_norm2(self.conv2(hidden)))
-        return hidden
+        hidden = F.relu(self.norm2(self.conv2(hidden)))
+        return hidden + self.residual(feature_map)
 
 
 class UNet(nn.Module):
-    """architecture consists of 3 encoder blocks sizing down to a bottleneck and sizing back up 3 decoder blocks."""
-    def __init__(self, img_ch=3, base_ch=64, time_emb_dim=256):
+    def __init__(self, img_ch=3, base_ch=64, time_emb_dim=256, n_layers=3):
         super().__init__()
 
         # time embedding
@@ -86,38 +87,45 @@ class UNet(nn.Module):
         )
 
         # encoder
-        self.encoder_block1 = Block(img_ch, base_ch, time_emb_dim)
-        self.encoder_block2 = Block(base_ch, base_ch * 2, time_emb_dim)
-        self.encoder_block3 = Block(base_ch * 2, base_ch * 4, time_emb_dim)
+        # channel sizes: base_ch, base_ch*2, base_ch*4, ... base_ch * 2^(n_layers-1)
+        enc_channels = [base_ch * (2 ** i) for i in range(n_layers)]
+        self.encoders = nn.ModuleList()
+        in_ch = img_ch
+        for out_ch in enc_channels:
+            self.encoders.append(Block(in_ch, out_ch, time_emb_dim))
+            in_ch = out_ch
         self.pool = nn.MaxPool2d(2)
 
         # bottleneck
-        self.bottleneck = Block(base_ch * 4, base_ch * 4, time_emb_dim)
+        self.bottleneck = Block(enc_channels[-1], enc_channels[-1], time_emb_dim)
 
         # decoder (input channels doubled for skip connections)
-        self.upsample3 = nn.ConvTranspose2d(base_ch * 4, base_ch * 4, kernel_size=2, stride=2)
-        self.decoder_block3 = Block(base_ch * 8, base_ch * 2, time_emb_dim)
-        self.upsample2 = nn.ConvTranspose2d(base_ch * 2, base_ch * 2, kernel_size=2, stride=2)
-        self.decoder_block2 = Block(base_ch * 4, base_ch, time_emb_dim)
-        self.upsample1 = nn.ConvTranspose2d(base_ch, base_ch, kernel_size=2, stride=2)
-        self.decoder_block1 = Block(base_ch * 2, base_ch, time_emb_dim)
+        self.upsamplers = nn.ModuleList()
+        self.decoders = nn.ModuleList()
+        for i in reversed(range(n_layers)):
+            up_in = enc_channels[i]
+            self.upsamplers.append(nn.ConvTranspose2d(up_in, up_in, kernel_size=2, stride=2))
+            dec_out = enc_channels[i - 1] if i > 0 else base_ch
+            self.decoders.append(Block(up_in * 2, dec_out, time_emb_dim))
 
         self.output_conv = nn.Conv2d(base_ch, img_ch, kernel_size=1)
 
     def forward(self, image, t):
         time_emb = self.time_mlp(self.time_embedding(t))
 
-        e1 = self.encoder_block1(image, time_emb)
-        e2 = self.encoder_block2(self.pool(e1), time_emb)
-        e3 = self.encoder_block3(self.pool(e2), time_emb)
+        # encoder
+        skips = []
+        x = image
+        for encoder in self.encoders:
+            x = encoder(x, time_emb)
+            skips.append(x)
+            x = self.pool(x)
 
-        bottleneck = self.bottleneck(self.pool(e3), time_emb)
+        x = self.bottleneck(x, time_emb)
 
-        d3 = self.upsample3(bottleneck)
-        d3 = self.decoder_block3(torch.cat([d3, e3], dim=1), time_emb)
-        d2 = self.upsample2(d3)
-        d2 = self.decoder_block2(torch.cat([d2, e2], dim=1), time_emb)
-        d1 = self.upsample1(d2)
-        d1 = self.decoder_block1(torch.cat([d1, e1], dim=1), time_emb)
+        # decoder
+        for upsample, decoder, skip in zip(self.upsamplers, self.decoders, reversed(skips)):
+            x = upsample(x)
+            x = decoder(torch.cat([x, skip], dim=1), time_emb)
 
-        return self.output_conv(d1)
+        return self.output_conv(x)

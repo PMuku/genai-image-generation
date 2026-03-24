@@ -27,7 +27,7 @@ EPOCHS: no of epochs for training
 BATCH_SIZE: batch size
 LR = learning rate
 """
-T = 300
+T = 500
 EPOCHS = args.epochs
 BATCH_SIZE = args.batch_size
 LR = 2e-4
