@@ -1,4 +1,5 @@
+data/**
+**/__pycache__/**
 .venv
-data/
-*/__pycache__/
-*.pth
+.DS_Store
+**.pth
