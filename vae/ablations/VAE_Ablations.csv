@@ -1,0 +1,8 @@
+Ablation,Architecture Remarks,Kernel,Stride,Padding,Input dim,Hidden dim,Latent dim,FID score,beta in loss function
+1,"5 Encoder: Conv2d, Decoder: ConvTranspose2d",4,2,1,64,192,64,258.53,0.6
+2,Same as Model 1,4,2,1,64,256,128,163.39,"min(0.3, 0.3 * epoch/50)"
+3,Replaced decoder ConvTranspose2d with Upsample+Conv2d,4,2,1,64,256,128,241.55,0.6
+4,Same as Model 1 and 2,4,2,1,128,512,256,166.89,"min(0.3, 0.3 * epoch/50)"
+5,Same as Model 1 and 2,4,2,1,128,256,128,203.31,"min(0.3, 0.3 * epoch/50)"
+,,,,,,,,,
+,,,,,,,,,E = recon + beta * KL

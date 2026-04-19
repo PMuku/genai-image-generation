@@ -1,5 +1,14 @@
 data/**
 **/__pycache__/**
 .venv
+data/
+*/__pycache__/
+*.pth
+vae/generated_images/
+vae/*.txt
+*.png
+*.jpg
+*.jpeg
+*/*/ablation_fid.ipynb
 .DS_Store
 **.pth

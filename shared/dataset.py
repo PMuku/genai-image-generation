@@ -1,4 +1,5 @@
 import os
+from PIL import Image
 import cv2
 import pandas as pd
 import torch
@@ -34,16 +35,18 @@ class GlassesDataset(Dataset):
         if img is None:
             raise FileNotFoundError(f"Image not found at path: {img_path}")
         
-        img = cv2.resize(img, (self.img_size, self.img_size))
+        
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB) # opencv loads images in BGR format, convert to RGB
 
         if self.transform:
+            img = Image.fromarray(img) # convert to PIL Image for torchvision transforms
             img = self.transform(img)
-        
-        img = img.astype('float32') / 255.0 # Normalize to [0,1]
+        else:
+            img = cv2.resize(img, (self.img_size, self.img_size))
+            img = img.astype('float32') / 255.0 # Normalize to [0,1]
 
-        img = torch.tensor(img, dtype=torch.float32)
-        img = img.permute(2, 0, 1) # currently (H, W, C) -> rearrange to (C, H, W) for torch
+            img = torch.tensor(img, dtype=torch.float32)
+            img = img.permute(2, 0, 1) # currently (H, W, C) -> rearrange to (C, H, W) for torch
 
         label = torch.tensor(label, dtype=torch.long)
 
