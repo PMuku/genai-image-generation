@@ -1,3 +1,5 @@
+data/**
+**/__pycache__/**
 .venv
 data/
 */__pycache__/
@@ -8,3 +10,5 @@ vae/*.txt
 *.jpg
 *.jpeg
 */*/ablation_fid.ipynb
+.DS_Store
+**.pth

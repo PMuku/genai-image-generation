@@ -1,0 +1,10 @@
+name: gen-ai-assignment-1
+channels:
+  - conda-forge
+packages:
+  - kagglehub
+  - matplotlib
+  - numpy
+  - opencv
+  - pandas
+  - pytorch
