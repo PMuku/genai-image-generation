@@ -173,7 +173,15 @@ def main():
                     energy_fake = E(gen_imgs)           
                     E.train()
 
-                    g_loss = energy_fake.mean()
+                    # batchnorm entropy regularisation
+                    entropy_term = 0.0
+                    for m in G.modules():
+                        if isinstance(m, nn.BatchNorm2d):
+                            gamma = m.weight
+                            sigma_sq = gamma.pow(2) + 1e-6
+                            entropy_term += 0.5 * torch.log(sigma_sq).mean()
+
+                    g_loss = energy_fake.mean() - 0.001 * entropy_term
                     G_losses.append(g_loss.item())
                 
                 opt_G.zero_grad()
