@@ -167,7 +167,12 @@ def main():
                 with torch.amp.autocast(device_type=device.type, dtype=torch.float16):
                     z_g = torch.randn(bs, z_dim, 1, 1, device=device)   
                     gen_imgs = G(z_g)                                  
+                    
+                    # freeze E for generator update
+                    E.eval()
                     energy_fake = E(gen_imgs)           
+                    E.train()
+
                     g_loss = energy_fake.mean()
                     G_losses.append(g_loss.item())
                 
