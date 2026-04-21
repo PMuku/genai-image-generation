@@ -106,8 +106,8 @@ transformations = transforms.Compose([
 def adaptive_augment(image, p=0.2):
     # augmentations with probability p
     if rd.random() < p: image = TF.hflip(image)
-    if rd.random() < p: image = TF.adjust_brightness(image, 0.8 + 0.4*rd.random.random())
-    if rd.random() < p: image = TF.adjust_contrast(image, 0.8 + 0.4*rd.random.random())
+    if rd.random() < p: image = TF.adjust_brightness(image, 0.8 + 0.4*rd.random())
+    if rd.random() < p: image = TF.adjust_contrast(image, 0.8 + 0.4*rd.random())
     return image
 
 def main():
@@ -123,7 +123,7 @@ def main():
         G = nn.DataParallel(G)
         D = nn.DataParallel(D)
     
-    scaler = torch.amp.GradScaler(torch.device)
+    scaler = torch.amp.GradScaler(device)
     criterion = nn.BCEWithLogitsLoss()
 
     opt_G = optim.Adam(G.parameters(), lr=0.0002, betas=(0.5, 0.999))
