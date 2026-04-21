@@ -15,10 +15,11 @@ device   = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 save_path = "checkpoints"
 
 import os
-ckpt_path = f"/kaggle/working/GAN_Checkpoints/GAN_final.pth"
+#ckpt_path = f"/kaggle/working/GAN_Checkpoints/GAN_final.pth"
+energy_path = f"/kaggle/working/GAN_Checkpoints/GAN_final_energy.pth"
 
-if os.path.exists(ckpt_path):
-    ckpt = torch.load(ckpt_path, map_location=device)
+if os.path.exists(energy_path):
+    ckpt = torch.load(energy_path, map_location=device)
 
     G_ema = Generator(z_dim=z_dim).to(device)
     G_ema.load_state_dict(ckpt["ema_shadow"], strict=False)
@@ -68,7 +69,11 @@ if os.path.exists(ckpt_path):
 
     trainfolder="/kaggle/working/glassesdata/train"
     if os.path.exists(trainfolder):
-        real_dataset = datasets.ImageFolder(trainfolder, transform=real_transform)
+        from shared.dataset import GlassesDataset
+        CSV_PATH = "data/processed/train.csv"
+        IMG_DIR = "data/raw/faces-spring-2020/faces-spring-2020"
+
+        real_dataset = GlassesDataset(CSV_PATH, IMG_DIR, transform=real_transform)
         real_loader  = DataLoader(real_dataset, batch_size=BATCH_SIZE,
                                 shuffle=True, num_workers=NUM_WORKERS)
         all_real = []
@@ -103,6 +108,7 @@ if os.path.exists(ckpt_path):
                 batch = nn.functional.interpolate(
                     batch, size=(299, 299), mode="bilinear", align_corners=False
                 )
+                batch = (batch + 1) / 2  # [-1,1] → [0,1]
                 feats.append(model(batch).cpu().numpy())
             return np.concatenate(feats, axis=0)
 
@@ -132,6 +138,7 @@ if os.path.exists(ckpt_path):
                 batch = nn.functional.interpolate(
                     batch, size=(299, 299), mode="bilinear", align_corners=False
                 )
+                batch = (batch + 1) / 2  # [-1,1] → [0,1]
                 logits = model(batch)                          
                 preds.append(torch.softmax(logits, dim=1).cpu().numpy())
             preds = np.concatenate(preds, axis=0)               
@@ -156,4 +163,4 @@ if os.path.exists(ckpt_path):
     else:
         print("Could not find train folder for computing FID on real images.")
 else:
-    print(f"Could not find checkpoint at {ckpt_path}")
+    print(f"Could not find checkpoint at {energy_path}")
