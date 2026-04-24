@@ -125,7 +125,7 @@ def main():
     
     scaler = torch.amp.GradScaler(device)
 
-    opt_G = optim.Adam(G.parameters(), lr=0.0002, betas=(0.5, 0.999))
+    opt_G = optim.Adam(G.parameters(), lr=0.0001, betas=(0.5, 0.999))
     opt_E = optim.Adam(E.parameters(), lr=0.0002, betas=(0.5, 0.999))
 
     ema = EMA(G.module if isinstance(G, nn.DataParallel) else G, decay=0.999)
@@ -155,11 +155,21 @@ def main():
                     energy_real = E(aug_imgs)
                     energy_fake = E(fake_imgs.detach())
 
-                    e_loss = energy_real.mean() - energy_fake.mean()
+                    e_loss = energy_real - energy_fake
+                    e_loss = e_loss.mean() / (e_loss.std() + 1e-6)  # normalize by batch std for stability
+                    
+                    if i % 3 == 0:  
+                        print(
+                            f"Epoch {epoch+1}, Batch {i} | "
+                            f"E(real): {energy_real.mean().item():.3f}, "
+                            f"E(fake): {energy_fake.mean().item():.3f}, "
+                            f"E_loss: {e_loss.item():.3f}"
+                        )
                     E_losses.append(e_loss.item())
 
                 opt_E.zero_grad()
                 scaler.scale(e_loss).backward()
+                torch.nn.utils.clip_grad_norm_(E.parameters(), 1.0)
                 scaler.step(opt_E)
                 scaler.update()
 
@@ -181,11 +191,19 @@ def main():
                             sigma_sq = gamma.pow(2) + 1e-6
                             entropy_term += 0.5 * torch.log(sigma_sq).mean()
 
-                    g_loss = energy_fake.mean() - 0.001 * entropy_term
+                    g_loss = energy_fake.mean() - 0.05 * entropy_term
+                    if i % 3 == 0:
+                        print(
+                            f"Epoch {epoch+1}, Batch {i} | "
+                            f"G_loss: {g_loss.item():.3f}, "
+                            f"Energy(fake): {energy_fake.mean().item():.3f}, "
+                            f"Entropy: {entropy_term.item():.3f}"
+                        )
                     G_losses.append(g_loss.item())
                 
                 opt_G.zero_grad()
                 scaler.scale(g_loss).backward()
+                torch.nn.utils.clip_grad_norm_(G.parameters(), 1.0)
                 scaler.step(opt_G)
                 scaler.update()
                 
@@ -193,9 +211,10 @@ def main():
         
         return G_losses, E_losses
 
-    epochs = 50
+    epochs = 20
 
-    save_path = "/kaggle/working/GAN_Checkpoints"
+    # save_path = "/kaggle/working/GAN_Checkpoints"
+    save_path = "gan/GAN_checkpoints"
     os.makedirs(save_path, exist_ok=True)
     G_losses, E_losses = train_model(epochs)
     torch.save({
@@ -217,38 +236,38 @@ def main():
     print(f"Saved EMA generator   → {save_path}/G_ema_final.pth")
 
     # --- Loss Plots ---
-    plt.figure(figsize=(8,4))
-    plt.plot(G_losses, label="G Loss")
-    plt.xlabel("Iterations")
-    plt.ylabel("Loss")
-    plt.title("Generator Loss Curve")
-    plt.legend()
-    plt.show()
+    # plt.figure(figsize=(8,4))
+    # plt.plot(G_losses, label="G Loss")
+    # plt.xlabel("Iterations")
+    # plt.ylabel("Loss")
+    # plt.title("Generator Loss Curve")
+    # plt.legend()
+    # plt.show()
 
-    plt.figure(figsize=(8,4))
-    plt.plot(E_losses, label="E Loss")
-    plt.xlabel("Iterations")
-    plt.ylabel("Loss")
-    plt.title("Energy Discriminator Loss Curve")
-    plt.legend()
-    plt.show()
+    # plt.figure(figsize=(8,4))
+    # plt.plot(E_losses, label="E Loss")
+    # plt.xlabel("Iterations")
+    # plt.ylabel("Loss")
+    # plt.title("Energy Discriminator Loss Curve")
+    # plt.legend()
+    # plt.show()
 
-    plt.figure(figsize=(8,4))
-    plt.plot(G_losses, label="Generator Loss")
-    plt.plot(E_losses, label="Energy Discriminator Loss")
-    plt.xlabel("Iterations")
-    plt.ylabel("Loss")
-    plt.title("GAN Loss (G vs E)")
-    plt.legend()
-    plt.show()
+    # plt.figure(figsize=(8,4))
+    # plt.plot(G_losses, label="Generator Loss")
+    # plt.plot(E_losses, label="Energy Discriminator Loss")
+    # plt.xlabel("Iterations")
+    # plt.ylabel("Loss")
+    # plt.title("GAN Loss (G vs E)")
+    # plt.legend()
+    # plt.show()
 
-    plt.figure(figsize=(8,4))
-    #plt.plot(D_real_acc, label="Real Accuracy")
-    plt.xlabel("Iterations")
-    plt.ylabel("Accuracy")
-    plt.title("Energy Discriminator Accuracy Over Time")
-    plt.legend()
-    plt.show()
+    # plt.figure(figsize=(8,4))
+    # #plt.plot(D_real_acc, label="Real Accuracy")
+    # plt.xlabel("Iterations")
+    # plt.ylabel("Accuracy")
+    # plt.title("Energy Discriminator Accuracy Over Time")
+    # plt.legend()
+    # plt.show()
 
 if __name__ == "__main__":
     main()

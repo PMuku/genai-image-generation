@@ -9,6 +9,13 @@ from torchvision.models import inception_v3, Inception_V3_Weights
 from scipy import linalg
 from scipy.stats import entropy
 
+import sys
+import os
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+from shared.dataset import GlassesDataset
+
 from model import Generator, EMA, z_dim
 
 device   = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -16,7 +23,7 @@ save_path = "checkpoints"
 
 import os
 #ckpt_path = f"/kaggle/working/GAN_Checkpoints/GAN_final.pth"
-energy_path = f"/kaggle/working/GAN_Checkpoints/GAN_final_energy.pth"
+energy_path = f"gan/GAN_Checkpoints/GAN_final.pth"
 
 if os.path.exists(energy_path):
     ckpt = torch.load(energy_path, map_location=device)
@@ -67,9 +74,9 @@ if os.path.exists(energy_path):
         transforms.Normalize([0.5]*3, [0.5]*3),
     ])
 
-    trainfolder="/kaggle/working/glassesdata/train"
-    if os.path.exists(trainfolder):
-        from shared.dataset import GlassesDataset
+    # trainfolder="/kaggle/working/glassesdata/train"
+    if True:
+        
         CSV_PATH = "data/processed/train.csv"
         IMG_DIR = "data/raw/faces-spring-2020/faces-spring-2020"
 
