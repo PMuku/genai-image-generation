@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 z_dim = 128  # latent vector size
 class Generator(nn.Module):
@@ -29,30 +30,40 @@ class Generator(nn.Module):
     def forward(self, z):
         return self.net(z)
 
-class Discriminator(nn.Module):
-    def __init__(self, img_channels=3, feature_d=32):
+class EnergyModel(nn.Module):
+    def __init__(self, img_channels=3, feature_d=32, n_experts=256):
         super().__init__()
-        self.net = nn.Sequential(
-            nn.Conv2d(img_channels, feature_d, 4, 2, 1, bias=False),   
+        # feature extractor f_φ — same conv stack as the old Discriminator
+        self.feature_extractor = nn.Sequential(
+            nn.Conv2d(img_channels, feature_d, 4, 2, 1, bias=False),
             nn.LeakyReLU(0.2, inplace=True),
 
-            nn.Conv2d(feature_d, feature_d*2, 4, 2, 1, bias=False),  
+            nn.Conv2d(feature_d, feature_d*2, 4, 2, 1, bias=False),
             nn.BatchNorm2d(feature_d*2),
             nn.LeakyReLU(0.2, inplace=True),
 
-            nn.Conv2d(feature_d*2, feature_d*4, 4, 2, 1, bias=False),  
+            nn.Conv2d(feature_d*2, feature_d*4, 4, 2, 1, bias=False),
             nn.BatchNorm2d(feature_d*4),
             nn.LeakyReLU(0.2, inplace=True),
 
-            nn.Conv2d(feature_d*4, feature_d*8, 4, 2, 1, bias=False),  
+            nn.Conv2d(feature_d*4, feature_d*8, 4, 2, 1, bias=False),
             nn.BatchNorm2d(feature_d*8),
             nn.LeakyReLU(0.2, inplace=True),
-
-            nn.Conv2d(feature_d*8, 1, 4, 1, 0, bias=False)             
         )
+        # n_experts linear projections of the feature space (W_i, b_i in Eq. 11)
+        # input: feature_d*8 maps × 4×4 spatial = 4096 for feature_d=32
+        self.experts = nn.Linear(feature_d * 8 * 4 * 4, n_experts)
 
-    def forward(self, img):
-        return self.net(img).view(-1, 1) 
+    def forward(self, x):
+        feat = self.feature_extractor(x).view(x.size(0), -1)
+
+        # product-of-experts term: -Σ log(1 + exp(W_i^T f(x) + b_i))  [Eq. 11]
+        poe = -F.softplus(self.experts(feat)).sum(dim=1, keepdim=True)
+
+        # quadratic term: ½ x^T x  (σ²=1 for inputs normalised to [-1, 1])  [Eq. 11]
+        quad = 0.001 * x.view(x.size(0), -1).pow(2).sum(dim=1, keepdim=True)
+
+        return quad + poe  # scalar energy per image; lower = more real
 
 class EMA:
     def __init__(self, model, decay=0.999):

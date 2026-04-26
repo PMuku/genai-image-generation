@@ -6,7 +6,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import torch
 from torch.utils.data import DataLoader
 from shared.dataset import GlassesDataset
-from gan.model import Generator, Discriminator, EMA, z_dim
+from gan.energy_model import Generator, EnergyModel, EMA, z_dim
 from torchvision import transforms
 import torch.nn as nn
 import torch.optim as optim
@@ -117,7 +117,7 @@ def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     G = Generator(z_dim=z_dim).to(device)
-    E = Discriminator().to(device)
+    E = EnergyModel().to(device)
 
     if torch.cuda.device_count() > 1:
         G = nn.DataParallel(G)
@@ -125,8 +125,8 @@ def main():
     
     scaler = torch.amp.GradScaler(device)
 
-    opt_G = optim.Adam(G.parameters(), lr=0.0001, betas=(0.5, 0.999))
-    opt_E = optim.Adam(E.parameters(), lr=0.0002, betas=(0.5, 0.999))
+    opt_G = optim.Adam(G.parameters(), lr=0.0002, betas=(0.5, 0.999))
+    opt_E = optim.Adam(E.parameters(), lr=0.0001, betas=(0.5, 0.999))
 
     ema = EMA(G.module if isinstance(G, nn.DataParallel) else G, decay=0.999)
     
@@ -155,9 +155,8 @@ def main():
                     energy_real = E(aug_imgs)
                     energy_fake = E(fake_imgs.detach())
 
-                    e_loss = energy_real - energy_fake
-                    e_loss = e_loss.mean() / (e_loss.std() + 1e-6)  # normalize by batch std for stability
-                    
+                    e_loss = (energy_real.mean() - energy_fake.mean()) * 0.01
+
                     if i % 3 == 0:  
                         print(
                             f"Epoch {epoch+1}, Batch {i} | "
@@ -166,44 +165,34 @@ def main():
                             f"E_loss: {e_loss.item():.3f}"
                         )
                     E_losses.append(e_loss.item())
-
-                opt_E.zero_grad()
-                scaler.scale(e_loss).backward()
-                torch.nn.utils.clip_grad_norm_(E.parameters(), 1.0)
-                scaler.step(opt_E)
-                scaler.update()
+                if i % 3 == 0:
+                    opt_E.zero_grad()
+                    scaler.scale(e_loss).backward()
+                    scaler.step(opt_E)
+                    scaler.update()
 
                 # generator
                 with torch.amp.autocast(device_type=device.type, dtype=torch.float16):
                     z_g = torch.randn(bs, z_dim, 1, 1, device=device)   
                     gen_imgs = G(z_g)                                  
-                    
-                    # freeze E for generator update
-                    E.eval()
+
                     energy_fake = E(gen_imgs)           
-                    E.train()
 
                     # batchnorm entropy regularisation
-                    entropy_term = 0.0
-                    for m in G.modules():
-                        if isinstance(m, nn.BatchNorm2d):
-                            gamma = m.weight
-                            sigma_sq = gamma.pow(2) + 1e-6
-                            entropy_term += 0.5 * torch.log(sigma_sq).mean()
+                    std = gen_imgs.std(dim=[0,2,3]).mean()
+                    g_loss = energy_fake.mean() - 1.0 * std
 
-                    g_loss = energy_fake.mean() - 0.05 * entropy_term
                     if i % 3 == 0:
                         print(
                             f"Epoch {epoch+1}, Batch {i} | "
                             f"G_loss: {g_loss.item():.3f}, "
                             f"Energy(fake): {energy_fake.mean().item():.3f}, "
-                            f"Entropy: {entropy_term.item():.3f}"
+                            f"Entropy: {std.item():.3f}"
                         )
                     G_losses.append(g_loss.item())
                 
                 opt_G.zero_grad()
                 scaler.scale(g_loss).backward()
-                torch.nn.utils.clip_grad_norm_(G.parameters(), 1.0)
                 scaler.step(opt_G)
                 scaler.update()
                 
@@ -211,7 +200,7 @@ def main():
         
         return G_losses, E_losses
 
-    epochs = 20
+    epochs = 50
 
     # save_path = "/kaggle/working/GAN_Checkpoints"
     save_path = "gan/GAN_checkpoints"
